@@ -189,7 +189,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
             matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged],
             handler: moveHandler
         )
-        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged]) { [weak self] event in
             guard let self else { return event }
             let mouse = NSEvent.mouseLocation
             let x = mouse.x + CGFloat(self.config.cursorOffsetX)
