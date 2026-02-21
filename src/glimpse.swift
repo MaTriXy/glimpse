@@ -80,6 +80,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
         window.center()
         window.delegate = self
         window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func setupWebView() {
@@ -215,5 +216,4 @@ let app = NSApplication.shared
 let delegate = AppDelegate(config: config)
 app.delegate = delegate
 app.setActivationPolicy(.regular)
-app.activate(ignoringOtherApps: true)
 app.run()
