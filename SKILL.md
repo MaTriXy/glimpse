@@ -41,11 +41,14 @@ const answer = await prompt(html, {
 import { open } from 'glimpseui';
 
 const win = open(html, options);
-win.on('ready', () => {});           // HTML loaded, DOM ready
+win.on('ready', (info) => {});       // HTML loaded — info has screen, appearance, cursor
 win.on('message', data => {});       // user interaction
+win.on('info', info => {});          // fresh system info (after getInfo())
 win.on('closed', () => {});          // window gone
 win.send('document.title = "Hi"');   // eval JS in webview
 win.setHTML('<h1>New content</h1>'); // replace HTML
+win.info;                            // last-known system info
+win.getInfo();                       // request fresh info
 win.close();                         // close window
 ```
 
@@ -64,6 +67,35 @@ win.close();                         // close window
   x, y,                   // exact screen position
   timeout,                // for prompt() only — ms before rejecting
 }
+```
+
+### System Info (available on ready)
+```js
+win.on('ready', (info) => {
+  // Screen
+  info.screen.width          // 2560 (full resolution)
+  info.screen.height         // 1440
+  info.screen.scaleFactor    // 2 (Retina)
+  info.screen.visibleWidth   // 2560 (excluding dock)
+  info.screen.visibleHeight  // 1367 (excluding menu bar)
+
+  // Appearance
+  info.appearance.darkMode         // true
+  info.appearance.accentColor      // "#007AFF"
+  info.appearance.reduceMotion     // false
+  info.appearance.increaseContrast // false
+
+  // Cursor
+  info.cursor.x   // 500
+  info.cursor.y   // 800
+
+  // All monitors
+  info.screens    // [{ x, y, width, height, scaleFactor, ... }, ...]
+});
+
+// Access anytime after ready:
+win.info.screen.width
+win.info.appearance.darkMode
 ```
 
 ### In-Page JavaScript Bridge
@@ -226,7 +258,34 @@ win.on('ready', () => {
 });
 ```
 
-### 6. Floating Notification
+### 6. Adaptive Dark/Light Mode
+Use system info to style the UI to match the user's appearance.
+
+```js
+import { open } from 'glimpseui';
+
+const win = open('', { width: 400, height: 200 });
+
+win.on('ready', ({ appearance, screen }) => {
+  const bg = appearance.darkMode ? '#1a1a2e' : '#ffffff';
+  const fg = appearance.darkMode ? '#ffffff' : '#333333';
+  const accent = appearance.accentColor;
+
+  win.setHTML(`
+    <body style="font-family: system-ui; padding: 24px; background: ${bg}; color: ${fg};">
+      <h2 style="color: ${accent};">Adaptive UI</h2>
+      <p>Dark mode: ${appearance.darkMode ? 'on' : 'off'}</p>
+      <p>Screen: ${screen.width}×${screen.height} @${screen.scaleFactor}x</p>
+      <button onclick="window.glimpse.close()"
+        style="padding: 8px 16px; background: ${accent}; color: white; border: none; border-radius: 6px; cursor: pointer;">
+        Close
+      </button>
+    </body>
+  `);
+});
+```
+
+### 7. Floating Notification
 A brief, auto-dismissing toast. No interaction needed.
 
 ```js
@@ -247,7 +306,7 @@ function notify(message, durationMs = 3000) {
 notify('✅ Deployed to production');
 ```
 
-### 7. Cursor Companion
+### 8. Cursor Companion
 A visual element that follows the cursor. Great for agent status indicators.
 
 ```js
@@ -272,7 +331,7 @@ const win = open(`
 setTimeout(() => win.close(), 10_000);
 ```
 
-### 8. Agent Thinking Indicator
+### 9. Agent Thinking Indicator
 Show a pulsing indicator while the agent is processing. Disappears when done.
 
 ```js
@@ -299,7 +358,7 @@ const stopThinking = showThinking();
 stopThinking();
 ```
 
-### 9. Image / Chart Display
+### 10. Image / Chart Display
 Show a generated chart or image.
 
 ```js
@@ -321,7 +380,7 @@ const win = open(`
 `, { width: 500, height: 350, title: 'Weekly Commits' });
 ```
 
-### 10. Frosted Glass Command Palette
+### 11. Frosted Glass Command Palette
 A frameless, transparent search/command palette.
 
 ```js
@@ -388,7 +447,7 @@ const result = await prompt(`
 
 ## Creative Ideas
 
-Things you can build with Glimpse that you might not have considered:
+Things you can build with Glimpse that you might not have considered (use `win.info` for screen dimensions and dark mode):
 
 - **Diff viewer** — Show a side-by-side diff of changes before committing
 - **Color picker** — HTML color input + preview, return the hex value
@@ -402,6 +461,9 @@ Things you can build with Glimpse that you might not have considered:
 - **System monitor** — Tiny floating CPU/memory widget using `.send()` to push updates
 - **Emoji picker** — Grid of emojis, click to select, return the character
 - **Pomodoro timer** — Floating transparent countdown timer
+- **Fullscreen overlay** — Use `win.info.screen` for exact dimensions, `frameless + transparent`
+- **Adaptive theming** — Read `win.info.appearance.darkMode` and style to match the OS
+- **Multi-monitor aware** — Use `win.info.screens` to position windows on specific displays
 
 ---
 

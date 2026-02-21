@@ -13,7 +13,7 @@ Glimpse opens a native WKWebView window in under 50ms and speaks a bidirectional
 ## Install
 
 ```bash
-npm install glimpse
+npm install glimpseui
 ```
 
 `npm install` automatically compiles the Swift binary via a `postinstall` hook (~2 seconds). See [Compile on Install](#compile-on-install) for details.
@@ -28,7 +28,7 @@ swiftc src/glimpse.swift -o src/glimpse
 ## Quick Start
 
 ```js
-import { open } from 'glimpse';
+import { open } from 'glimpseui';
 
 const win = open(`
   <html>
@@ -109,7 +109,7 @@ win.followCursor(true);  // resume tracking
 Opens a native window and returns a `GlimpseWindow`. The HTML is displayed once the WebView signals ready.
 
 ```js
-import { open } from 'glimpse';
+import { open } from 'glimpseui';
 
 const win = open('<html>...</html>', {
   width:  800,    // default: 800
@@ -140,7 +140,7 @@ const win = open('<html>...</html>', {
 One-shot helper — opens a window, waits for the first message, then closes it automatically. Returns a `Promise<data | null>` where `data` is the first message payload and `null` means the user closed the window without sending anything.
 
 ```js
-import { prompt } from 'glimpse';
+import { prompt } from 'glimpseui';
 
 const answer = await prompt(`
   <h2>Delete this file?</h2>
@@ -161,13 +161,19 @@ Accepts the same `options` as `open()`. Optional `options.timeout` (ms) rejects 
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `ready` | — | WebView is loaded and ready to receive commands |
+| `ready` | `info: object` | WebView loaded — includes screen, appearance, and cursor info |
 | `message` | `data: object` | Message sent from the page via `window.glimpse.send(data)` |
+| `info` | `info: object` | Fresh system info (response to `.getInfo()`) |
 | `closed` | — | Window was closed (by user or via `.close()`) |
 | `error` | `Error` | Process error or malformed protocol line |
 
 ```js
-win.on('ready',   ()    => console.log('window ready'));
+win.on('ready', (info) => {
+  console.log(info.screen);     // { width, height, scaleFactor, visibleWidth, visibleHeight, ... }
+  console.log(info.appearance); // { darkMode, accentColor, reduceMotion, increaseContrast }
+  console.log(info.cursor);     // { x, y }
+  console.log(info.screens);    // [{ x, y, width, height, scaleFactor, ... }, ...]
+});
 win.on('message', (msg) => console.log('from page:', msg));
 win.on('closed',  ()    => process.exit(0));
 win.on('error',   (err) => console.error(err));
@@ -190,6 +196,18 @@ win.setHTML('<html><body><h1>Step 2</h1></body></html>');
 ```js
 win.followCursor(true);   // attach to cursor
 win.followCursor(false);  // detach
+```
+
+**`win.info`** — Getter for the last-known system info (screen, appearance, cursor). Available after `ready`.
+```js
+const { width, height } = win.info.screen;
+const isDark = win.info.appearance.darkMode;
+```
+
+**`win.getInfo()`** — Request fresh system info. Emits an `info` event with updated data.
+```js
+win.getInfo();
+win.on('info', (info) => console.log(info.appearance.darkMode));
 ```
 
 **`win.loadFile(path)`** — Load a local HTML file into the WebView by absolute path.
@@ -241,6 +259,11 @@ Glimpse uses a newline-delimited JSON (JSON Lines) protocol. Each line is a comp
 {"type":"file","path":"/path/to/page.html"}
 ```
 
+**Get Info** — Request current system info (screen, appearance, cursor). Responds with an `info` event.
+```json
+{"type":"get-info"}
+```
+
 **Close** — Close the window and exit.
 ```json
 {"type":"close"}
@@ -248,9 +271,14 @@ Glimpse uses a newline-delimited JSON (JSON Lines) protocol. Each line is a comp
 
 ### Stdout → Host (events)
 
-**Ready** — WebView finished loading initial blank page. Send HTML after this.
+**Ready** — WebView finished loading. Includes system info.
 ```json
-{"type":"ready"}
+{"type":"ready","screen":{"width":2560,"height":1440,"scaleFactor":2,"visibleX":0,"visibleY":48,"visibleWidth":2560,"visibleHeight":1367},"screens":[...],"appearance":{"darkMode":true,"accentColor":"#007AFF","reduceMotion":false,"increaseContrast":false},"cursor":{"x":500,"y":800}}
+```
+
+**Info** — Response to a `get-info` command. Same shape as `ready` but with `type: "info"`.
+```json
+{"type":"info","screen":{...},"screens":[...],"appearance":{...},"cursor":{...}}
 ```
 
 **Message** — Data sent from the page via `window.glimpse.send(...)`.

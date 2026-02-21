@@ -7,8 +7,8 @@ Native macOS micro-UI for scripts and agents. Opens a WKWebView window in under 
 Two source files, zero dependencies:
 
 ```
-src/glimpse.swift   — Native binary (Swift/Cocoa/WebKit, ~350 lines)
-src/glimpse.mjs     — Node.js ESM wrapper (EventEmitter API, ~160 lines)
+src/glimpse.swift   — Native binary (Swift/Cocoa/WebKit, ~420 lines)
+src/glimpse.mjs     — Node.js ESM wrapper (EventEmitter API, ~175 lines)
 ```
 
 The Swift binary is a standalone CLI that speaks JSON Lines. The Node wrapper is a convenience layer — any language that can spawn a process and pipe JSON can use Glimpse.
@@ -19,10 +19,12 @@ The Swift binary is a standalone CLI that speaks JSON Lines. The Node wrapper is
 Node → Swift (stdin):   {"type":"html","html":"<base64>"}
                         {"type":"eval","js":"..."}
                         {"type":"file","path":"/tmp/page.html"}
-                        {"type":"close"}
+                        {"type":"get-info"}
                         {"type":"follow-cursor","enabled":true}
+                        {"type":"close"}
 
-Swift → Node (stdout):  {"type":"ready"}
+Swift → Node (stdout):  {"type":"ready","screen":{...},"appearance":{...},"cursor":{...},"screens":[...]}
+                        {"type":"info","screen":{...},"appearance":{...},"cursor":{...},"screens":[...]}
                         {"type":"message","data":{...}}
                         {"type":"closed"}
 ```
@@ -71,10 +73,11 @@ End-to-end integration test: open → ready → eval (click button) → message 
 
 ### Node Patterns
 
-- `GlimpseWindow` extends `EventEmitter` with private class fields (`#proc`, `#closed`, `#pendingHTML`)
-- Two-phase ready handshake: first `ready` = blank page (triggers HTML send), second `ready` = user content loaded (emitted to caller)
+- `GlimpseWindow` extends `EventEmitter` with private class fields (`#proc`, `#closed`, `#pendingHTML`, `#info`)
+- Two-phase ready handshake: first `ready` = blank page (triggers HTML send), second `ready` = user content loaded (emitted to caller with system info)
 - `#write()` guards on `#closed` to prevent EPIPE crashes
 - `prompt()` uses a `resolved` flag to prevent double-settlement across message/closed/error/timeout paths
+- `#info` caches the last system info from `ready`/`info` events, accessible via `win.info` getter
 
 ### Adding a New CLI Flag
 
@@ -102,7 +105,9 @@ End-to-end integration test: open → ready → eval (click button) → message 
 ```
 src/glimpse.swift   — The native binary (THE core)
 src/glimpse.mjs     — Node.js ESM wrapper
+bin/glimpse.mjs     — CLI entry point (npx glimpseui)
 test.mjs            — Integration test
+scripts/publish.sh  — npm publish with preflight checks
 package.json        — NPM config, build/postinstall scripts
 README.md           — User-facing docs (API, protocol, CLI)
 SKILL.md            — Agent skill (patterns, examples, creative ideas)
