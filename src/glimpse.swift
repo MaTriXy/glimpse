@@ -81,6 +81,13 @@ func parseArgs() -> Config {
     return config
 }
 
+// MARK: - Window Subclass (keyboard support for frameless windows)
+
+class GlimpsePanel: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 // MARK: - AppDelegate
 
 @MainActor
@@ -114,7 +121,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
         let styleMask: NSWindow.StyleMask = config.frameless
             ? [.borderless]
             : [.titled, .closable, .miniaturizable, .resizable]
-        window = NSWindow(
+        window = GlimpsePanel(
             contentRect: rect,
             styleMask: styleMask,
             backing: .buffered,
@@ -301,6 +308,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
 
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         MainActor.assumeIsolated {
+            window.makeFirstResponder(webView)
             writeToStdout(["type": "ready"])
         }
     }
