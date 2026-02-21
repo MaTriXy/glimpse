@@ -47,6 +47,61 @@ win.on('message', (data) => {
 win.on('closed', () => process.exit(0));
 ```
 
+## Window Modes
+
+Glimpse supports several window style flags that can be combined freely:
+
+| Flag | Effect |
+|------|--------|
+| `frameless` | Removes the title bar — use your own HTML chrome |
+| `floating` | Always on top of other windows |
+| `transparent` | Clear window background — HTML body needs `background: transparent` |
+| `clickThrough` | Window ignores all mouse events |
+
+Common combinations:
+
+- **Floating HUD**: `floating: true` — status panels, agent indicators
+- **Custom dialog**: `frameless: true` — clean UI with no system chrome
+- **Overlay**: `frameless + transparent` — shaped widgets that float over content
+- **Companion widget**: `frameless + transparent + floating + clickThrough` — visual-only overlays that don't interfere with the desktop
+
+## Follow Cursor
+
+Attach a window to the cursor. Combined with `transparent + frameless + floating + clickThrough`, this creates visual companions that follow the mouse without interfering with normal usage.
+
+```js
+import { open } from './src/glimpse.mjs';
+
+const win = open(`
+  <body style="background: transparent; margin: 0;">
+    <svg width="60" height="60" style="filter: drop-shadow(0 0 8px rgba(0,255,200,0.6));">
+      <circle cx="30" cy="30" r="20" fill="none" stroke="cyan" stroke-width="2">
+        <animateTransform attributeName="transform" type="rotate"
+          from="0 30 30" to="360 30 30" dur="1s" repeatCount="indefinite"/>
+      </circle>
+    </svg>
+  </body>
+`, {
+  width: 60, height: 60,
+  transparent: true,
+  frameless: true,
+  followCursor: true,
+  clickThrough: true,
+  cursorOffset: { x: 20, y: -20 }
+});
+```
+
+The window tracks the cursor in real-time across all screens. `followCursor` implies `floating` — the window stays on top automatically.
+
+You can also toggle tracking dynamically after the window is open:
+
+```js
+win.followCursor(false); // stop tracking
+win.followCursor(true);  // resume tracking
+```
+
+**Use cases:** animated SVG companions, agent "thinking" indicators, floating tooltips, custom cursor replacements.
+
 ## API Reference
 
 ### `open(html, options?)`
@@ -62,6 +117,22 @@ const win = open('<html>...</html>', {
   title:  'App',  // default: "Glimpse"
 });
 ```
+
+**All options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `width` | number | `800` | Window width in pixels |
+| `height` | number | `600` | Window height in pixels |
+| `title` | string | `"Glimpse"` | Title bar text (ignored when frameless) |
+| `x` | number | — | Horizontal screen position (omit to center) |
+| `y` | number | — | Vertical screen position (omit to center) |
+| `frameless` | boolean | `false` | Remove the title bar |
+| `floating` | boolean | `false` | Always on top of other windows |
+| `transparent` | boolean | `false` | Transparent window background |
+| `clickThrough` | boolean | `false` | Window ignores all mouse events |
+| `followCursor` | boolean | `false` | Track cursor position in real-time |
+| `cursorOffset` | `{ x?, y? }` | `{ x: 20, y: -20 }` | Pixel offset from cursor when `followCursor` is on |
 
 ### GlimpseWindow
 
@@ -96,6 +167,12 @@ win.send(`document.getElementById('status').textContent = 'Done'`);
 win.setHTML('<html><body><h1>Step 2</h1></body></html>');
 ```
 
+**`win.followCursor(enabled)`** — Start or stop cursor tracking at runtime.
+```js
+win.followCursor(true);   // attach to cursor
+win.followCursor(false);  // detach
+```
+
 **`win.close()`** — Close the window programmatically.
 ```js
 win.close();
@@ -127,6 +204,12 @@ Glimpse uses a newline-delimited JSON (JSON Lines) protocol. Each line is a comp
 **Eval JavaScript** — Run JS in the WebView.
 ```json
 {"type":"eval","js":"document.title = 'Updated'"}
+```
+
+**Follow Cursor** — Toggle cursor tracking at runtime.
+```json
+{"type":"follow-cursor","enabled":true}
+{"type":"follow-cursor","enabled":false}
 ```
 
 **Close** — Close the window and exit.
@@ -170,6 +253,15 @@ Available flags:
 | `--width N` | `800` | Window width in pixels |
 | `--height N` | `600` | Window height in pixels |
 | `--title STR` | `"Glimpse"` | Window title bar text |
+| `--x N` | — | Horizontal screen position (omit to center) |
+| `--y N` | — | Vertical screen position (omit to center) |
+| `--frameless` | off | Remove the title bar |
+| `--floating` | off | Always on top of other windows |
+| `--transparent` | off | Transparent window background |
+| `--click-through` | off | Window ignores all mouse events |
+| `--follow-cursor` | off | Track cursor position in real-time |
+| `--cursor-offset-x N` | `20` | Horizontal offset from cursor |
+| `--cursor-offset-y N` | `-20` | Vertical offset from cursor |
 
 **Shell example — encode HTML and pipe it in:**
 ```bash
