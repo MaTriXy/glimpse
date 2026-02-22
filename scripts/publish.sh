@@ -56,7 +56,7 @@ echo "  ✓ Binary compiled"
 # 6. Run tests
 echo ""
 echo "🧪 Running tests..."
-node test.mjs
+npm test
 echo "  ✓ Tests passed"
 
 # 7. Show what will be published

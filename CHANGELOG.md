@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2
+
+Housekeeping release — better docs, organized tests, and a demo video.
+
+- **Docs**: Add performance benchmarks to README (warm start ~310ms, cold start ~2s on Apple Silicon)
+- **Docs**: Embed demo video at the top of README for GitHub and pi package registry
+- **Chore**: Move tests from root `test.mjs` to `test/` directory
+- **Fix**: Update publish script to use `npm test` instead of hardcoded `test.mjs` path
+- **Skill**: Use resolved absolute import paths instead of bare `'glimpseui'` specifier (fixes imports from `/tmp`)
+
 ## 0.3.1
 
 Fix pi package skill discovery errors when installing via `pi install npm:glimpseui`.
