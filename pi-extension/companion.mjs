@@ -248,7 +248,7 @@ server.listen(SOCK, () => {
 // ── window ────────────────────────────────────────────────────────────────────
 
 win = open(buildHTML(), {
-  width: 1000,
+  width: 1400,
   height: 120,
   frameless: true,
   floating: true,
