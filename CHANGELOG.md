@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.5
+
+Hidden window prewarm mode — open a window invisibly, let the WebView load content in the background, then reveal it instantly with the `show` command. Useful for eliminating perceived latency in agents and tools that know they'll need a window soon.
+
+- **Feature**: `hidden` option / `--hidden` CLI flag — starts the window off-screen with accessory activation policy
+- **Feature**: `show` protocol command — reveals a hidden window, optionally setting the title, and activates the app
+- **Feature**: `win.show(options?)` method on the Node wrapper
+
 ## 0.3.4
 
 - **Chore**: Update repository URL and author in package.json

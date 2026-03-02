@@ -172,6 +172,7 @@ const win = open('<html>...</html>', {
 | `followMode` | string | `"snap"` | Follow animation mode: `snap` (instant) or `spring` (iOS-style elastic with overshoot) |
 | `cursorAnchor` | string | `null` | Snap point around cursor: `top-left`, `top-right`, `right`, `bottom-right`, `bottom-left`, `left`. Positions window with a safe zone gap; overrides raw offset positioning. |
 | `cursorOffset` | `{ x?, y? }` | `{ x: 20, y: -20 }` | Pixel offset from cursor (or fine-tuning on top of `cursorAnchor`) |
+| `hidden` | boolean | `false` | Start the window hidden (prewarm mode) — load HTML in the background, then reveal with `win.show()` |
 | `autoClose` | boolean | `false` | Close the window automatically after the first `message` event |
 
 ### `prompt(html, options?)`
@@ -257,6 +258,12 @@ win.on('info', (info) => console.log(info.appearance.darkMode));
 win.loadFile('/path/to/page.html');
 ```
 
+**`win.show(options?)`** — Reveal a hidden window (see `hidden` option). Activates the app and brings the window to front. Optional `options.title` sets the window title.
+```js
+win.show();                        // reveal with default title
+win.show({ title: 'Results' });    // reveal and set title
+```
+
 **`win.close()`** — Close the window programmatically.
 ```js
 win.close();
@@ -310,6 +317,12 @@ Glimpse uses a newline-delimited JSON (JSON Lines) protocol. Each line is a comp
 **Get Info** — Request current system info (screen, appearance, cursor). Responds with an `info` event.
 ```json
 {"type":"get-info"}
+```
+
+**Show** — Reveal a hidden window (started with `--hidden`). Activates the app and brings the window to front. Optional `title` sets the window title.
+```json
+{"type":"show"}
+{"type":"show","title":"Results"}
 ```
 
 **Close** — Close the window and exit.
@@ -371,6 +384,7 @@ Available flags:
 | `--cursor-anchor <position>` | — | Snap point around cursor: `top-left`, `top-right`, `right`, `bottom-right`, `bottom-left`, `left` |
 | `--cursor-offset-x N` | `20` | Horizontal offset from cursor (or fine-tuning on top of `--cursor-anchor`) |
 | `--cursor-offset-y N` | `-20` | Vertical offset from cursor (or fine-tuning on top of `--cursor-anchor`) |
+| `--hidden` | off | Start the window hidden (prewarm mode) — load HTML in background, reveal with `show` command |
 | `--auto-close` | off | Exit after receiving the first message from the page |
 
 **Shell example — encode HTML and pipe it in:**

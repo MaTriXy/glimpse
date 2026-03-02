@@ -87,6 +87,12 @@ class GlimpseWindow extends EventEmitter {
     this.#write({ type: 'html', html: Buffer.from(html).toString('base64') });
   }
 
+  show(options = {}) {
+    const msg = { type: 'show' };
+    if (options.title != null) msg.title = options.title;
+    this.#write(msg);
+  }
+
   close() {
     this.#write({ type: 'close' });
   }
@@ -128,6 +134,7 @@ export function open(html, options = {}) {
   if (options.transparent)  args.push('--transparent');
   if (options.clickThrough) args.push('--click-through');
   if (options.followCursor) args.push('--follow-cursor');
+  if (options.hidden)      args.push('--hidden');
   if (options.autoClose)   args.push('--auto-close');
 
   if (options.x != null) args.push('--x', String(options.x));

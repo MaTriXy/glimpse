@@ -131,6 +131,7 @@ struct Config {
     var cursorOffsetX: Int = 20
     var cursorOffsetY: Int = -20
     var clickThrough: Bool = false
+    var hidden: Bool = false
     var autoClose: Bool = false
     var cursorAnchor: String? = nil
     var followMode: String = "snap"
@@ -173,6 +174,8 @@ func parseArgs() -> Config {
             if i < args.count, let v = Int(args[i]) { config.cursorOffsetY = v }
         case "--click-through":
             config.clickThrough = true
+        case "--hidden":
+            config.hidden = true
         case "--auto-close":
             config.autoClose = true
         case "--cursor-anchor":
@@ -219,6 +222,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
     var webView: WKWebView!
     let config: Config
 
+    // Hidden state — tracks whether the window is hidden (prewarm mode)
+    var hidden: Bool = false
+
     // Cursor anchor — mutable so the follow-cursor protocol command can update it at runtime
     var cursorAnchor: String? = nil
 
@@ -249,6 +255,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        hidden = config.hidden
         cursorAnchor = config.cursorAnchor
         followMode = config.followMode
         setupWindow()
@@ -312,7 +319,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
             window.center()
         }
         window.delegate = self
-        if config.clickThrough {
+        if config.hidden {
+            // Explicitly keep the window off-screen — WKWebView loading
+            // can implicitly order the window in on macOS.
+            window.orderOut(nil)
+        } else if config.clickThrough {
             window.orderFrontRegardless()
         } else {
             window.makeKeyAndOrderFront(nil)
@@ -591,6 +602,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
                 info["cursorTip"] = tip
             }
             writeToStdout(info)
+        case "show":
+            if let title = json["title"] as? String {
+                window.title = title
+            }
+            hidden = false
+            if !config.clickThrough {
+                NSApp.setActivationPolicy(.regular)
+            }
+            window.makeKeyAndOrderFront(nil)
+            window.makeFirstResponder(webView)
+            NSApp.activate(ignoringOtherApps: true)
         case "close":
             closeAndExit()
         default:
@@ -607,7 +629,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScri
 
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         MainActor.assumeIsolated {
-            window.makeFirstResponder(webView)
+            if hidden {
+                // WKWebView loading can implicitly order the window in.
+                // Force it back out after every navigation while hidden.
+                window.orderOut(nil)
+            } else {
+                window.makeFirstResponder(webView)
+            }
             var info = getSystemInfo()
             info["type"] = "ready"
             if let tip = computeCursorTip() {
@@ -662,5 +690,5 @@ let config = parseArgs()
 let app = NSApplication.shared
 let delegate = AppDelegate(config: config)
 app.delegate = delegate
-app.setActivationPolicy(config.clickThrough ? .accessory : .regular)
+app.setActivationPolicy((config.clickThrough || config.hidden) ? .accessory : .regular)
 app.run()
