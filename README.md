@@ -1,16 +1,16 @@
 # Glimpse
 
-Native macOS micro-UI for scripts and agents.
+Native micro-UI for scripts and agents. macOS, Linux, and Windows.
 
 https://github.com/user-attachments/assets/57822cd2-4606-4865-a555-d8ccacd31b40
 
-Glimpse opens a native WKWebView window in under 50ms and speaks a bidirectional JSON Lines protocol over stdin/stdout. No Electron, no browser, no runtime dependencies — just a tiny Swift binary and a Node.js wrapper.
+Glimpse opens a native WebView window and speaks a bidirectional JSON Lines protocol over stdin/stdout. No Electron, no browser — just a tiny native binary and a Node.js wrapper.
 
-## Requirements
-
-- macOS (any recent version)
-- Xcode Command Line Tools: `xcode-select --install`
-- Node.js 18+
+| Platform | Backend | Requirements |
+|----------|---------|--------------|
+| macOS | Swift + WKWebView | Xcode Command Line Tools |
+| Linux | Rust + GTK4 + WebKitGTK | Rust toolchain, GTK4/WebKitGTK dev packages |
+| Windows | .NET 8 + WebView2 | .NET 8 SDK, Edge WebView2 Runtime |
 
 ## Install
 
@@ -18,7 +18,15 @@ Glimpse opens a native WKWebView window in under 50ms and speaks a bidirectional
 npm install glimpseui
 ```
 
-`npm install` automatically compiles the Swift binary via a `postinstall` hook (~2 seconds). See [Compile on Install](#compile-on-install) for details.
+`npm install` runs a `postinstall` hook that compiles the native binary for your platform. If the required toolchain isn't found, the build is skipped with a warning — you can compile manually later.
+
+**Manual build:**
+```bash
+npm run build            # auto-detect platform
+npm run build:macos      # swiftc
+npm run build:linux      # cargo build --release
+npm run build:windows    # dotnet publish
+```
 
 ### Pi Agent Package
 
@@ -28,13 +36,6 @@ pi install npm:glimpseui
 
 Installs the Glimpse skill and companion extension for [pi](https://github.com/mariozechner/pi). The companion is a floating status pill that follows your cursor showing what your agents are doing in real-time. Toggle it with the `/companion` command.
 
-**Manual build:**
-```bash
-npm run build
-# or directly:
-swiftc src/glimpse.swift -o src/glimpse
-```
-
 ## Quick Start
 
 ```js
@@ -42,7 +43,7 @@ import { open } from 'glimpseui';
 
 const win = open(`
   <html>
-    <body style="font-family:sans-serif; padding:2rem;">
+    <body style="font-family: sans-serif; padding: 2rem;">
       <h2>Hello from Glimpse</h2>
       <button onclick="glimpse.send({ action: 'greet' })">Say hello</button>
     </body>
@@ -80,7 +81,7 @@ Common combinations:
 Attach a window to the cursor. Combined with `transparent + frameless + floating + clickThrough`, this creates visual companions that follow the mouse without interfering with normal usage.
 
 ```js
-import { open } from './src/glimpse.mjs';
+import { open } from 'glimpseui';
 
 const win = open(`
   <body style="background: transparent; margin: 0;">
@@ -103,12 +104,14 @@ const win = open(`
 
 The window tracks the cursor in real-time across all screens. `followCursor` implies `floating` — the window stays on top automatically.
 
+**Platform support:** Follow cursor works on macOS and Windows. On Linux, it requires Hyprland (via IPC socket). Other Wayland compositors and X11 are not yet supported — `followCursor` will emit a warning and be silently ignored.
+
 You can also toggle tracking dynamically after the window is open:
 
 ```js
-win.followCursor(false);                // stop tracking
-win.followCursor(true);                 // resume tracking (snap mode)
-win.followCursor(true, undefined, 'spring'); // resume with spring physics
+win.followCursor(false);                         // stop tracking
+win.followCursor(true);                          // resume tracking (snap mode)
+win.followCursor(true, undefined, 'spring');      // resume with spring physics
 ```
 
 ### Cursor Anchor Snap Points
@@ -123,7 +126,7 @@ Instead of raw pixel offsets, use `cursorAnchor` to position the window at one o
   bottom-left  bottom-right
 ```
 
-A fixed **safe zone** is automatically applied so the window never overlaps the cursor graphic (accounts for the largest macOS system cursors plus 8pt padding). `cursorOffset` can still be used on top of an anchor as a fine-tuning adjustment.
+A fixed **safe zone** is automatically applied so the window never overlaps the cursor graphic. `cursorOffset` can still be used on top of an anchor as a fine-tuning adjustment.
 
 ```js
 // Window snaps to the right of the cursor with a safe gap
@@ -137,7 +140,29 @@ const win = open(html, {
 win.followCursor(true, 'bottom-left');
 ```
 
-**Use cases:** animated SVG companions, agent "thinking" indicators, floating tooltips, custom cursor replacements.
+## Menu Bar Mode (macOS only)
+
+`statusItem()` creates a menu bar icon with a popover WebView — click the icon to show/hide your HTML content. The popover auto-closes when clicking outside.
+
+```js
+import { statusItem } from 'glimpseui';
+
+const item = statusItem('<h1>Hello from the menu bar</h1>', {
+  title: '👁',
+  width: 300,
+  height: 200,
+});
+
+item.on('click', () => console.log('popover toggled'));
+
+// Dynamic updates
+item.setTitle('🔴');
+item.resize(400, 300);
+```
+
+CLI: `glimpse --status-item --title "👁" --width 300 --height 200`
+
+Throws on Linux and Windows — menu bar mode is macOS-only.
 
 ## API Reference
 
@@ -169,17 +194,42 @@ const win = open('<html>...</html>', {
 | `transparent` | boolean | `false` | Transparent window background |
 | `clickThrough` | boolean | `false` | Window ignores all mouse events |
 | `followCursor` | boolean | `false` | Track cursor position in real-time |
-| `followMode` | string | `"snap"` | Follow animation mode: `snap` (instant) or `spring` (iOS-style elastic with overshoot) |
-| `cursorAnchor` | string | `null` | Snap point around cursor: `top-left`, `top-right`, `right`, `bottom-right`, `bottom-left`, `left`. Positions window with a safe zone gap; overrides raw offset positioning. |
+| `followMode` | string | `"snap"` | Follow animation: `snap` (instant) or `spring` (elastic with overshoot) |
+| `cursorAnchor` | string | — | Snap point around cursor: `top-left`, `top-right`, `right`, `bottom-right`, `bottom-left`, `left` |
 | `cursorOffset` | `{ x?, y? }` | `{ x: 20, y: -20 }` | Pixel offset from cursor (or fine-tuning on top of `cursorAnchor`) |
-| `openLinks` | boolean | `false` | Open clicked `http`/`https` links in the system browser instead of inside Glimpse |
-| `openLinksApp` | string | `null` | Full path to an app bundle to open links with (for example `"/Applications/Google Chrome.app"`) |
-| `hidden` | boolean | `false` | Start the window hidden (prewarm mode) — load HTML in the background, then reveal with `win.show()` |
-| `autoClose` | boolean | `false` | Close the window automatically after the first `message` event |
+| `openLinks` | boolean | `false` | Open clicked `http`/`https` links in the system browser (macOS only) |
+| `openLinksApp` | string | — | App bundle path for opening links, e.g. `"/Applications/Firefox.app"` (macOS only) |
+| `hidden` | boolean | `false` | Start hidden (prewarm mode) — load HTML in the background, reveal with `win.show()` |
+| `autoClose` | boolean | `false` | Close automatically after the first `message` event |
+
+### `statusItem(html, options?)` — macOS only
+
+Creates a menu bar icon with a popover WebView. Returns a `GlimpseStatusItem` (extends `GlimpseWindow`).
+
+```js
+import { statusItem } from 'glimpseui';
+
+const item = statusItem('<h1>Status</h1>', {
+  title: '👁',     // menu bar icon/text
+  width: 300,
+  height: 200,
+});
+```
+
+**Additional methods:**
+
+- **`item.setTitle(title)`** — Update the menu bar label.
+- **`item.resize(width, height)`** — Change the popover dimensions.
+
+**Additional events:**
+
+- **`click`** — Emitted when the user clicks the menu bar icon.
+
+Throws `Error` on Linux and Windows.
 
 ### `prompt(html, options?)`
 
-One-shot helper — opens a window, waits for the first message, then closes it automatically. Returns a `Promise<data | null>` where `data` is the first message payload and `null` means the user closed the window without sending anything.
+One-shot helper — opens a window, waits for the first message, then closes. Returns `Promise<data | null>` where `data` is the first message payload and `null` means the window was closed without sending.
 
 ```js
 import { prompt } from 'glimpseui';
@@ -195,6 +245,32 @@ if (answer?.ok) console.log('Deleted!');
 
 Accepts the same `options` as `open()`. Optional `options.timeout` (ms) rejects the promise if no message arrives in time.
 
+### `getNativeHostInfo()`
+
+Returns the resolved native binary path and platform info:
+
+```js
+import { getNativeHostInfo } from 'glimpseui';
+
+const host = getNativeHostInfo();
+// { path: '/path/to/glimpse', platform: 'darwin', buildHint: "Run 'npm run build:macos'..." }
+```
+
+### `supportsFollowCursor()` / `getFollowCursorSupport()`
+
+Runtime capability detection for follow-cursor:
+
+```js
+import { supportsFollowCursor, getFollowCursorSupport } from 'glimpseui';
+
+if (supportsFollowCursor()) {
+  // safe to use followCursor
+} else {
+  const { reason } = getFollowCursorSupport();
+  console.warn(reason); // e.g. "Wayland follow-cursor is disabled without a compositor-specific backend"
+}
+```
+
 ### GlimpseWindow
 
 `GlimpseWindow` extends `EventEmitter`.
@@ -206,6 +282,7 @@ Accepts the same `options` as `open()`. Optional `options.timeout` (ms) rejects 
 | `ready` | `info: object` | WebView loaded — includes screen, appearance, and cursor info |
 | `message` | `data: object` | Message sent from the page via `window.glimpse.send(data)` |
 | `info` | `info: object` | Fresh system info (response to `.getInfo()`) |
+| `click` | — | Menu bar icon clicked (status item mode only) |
 | `closed` | — | Window was closed (by user or via `.close()`) |
 | `error` | `Error` | Process error or malformed protocol line |
 
@@ -215,11 +292,10 @@ win.on('ready', (info) => {
   console.log(info.appearance); // { darkMode, accentColor, reduceMotion, increaseContrast }
   console.log(info.cursor);     // { x, y }
   console.log(info.screens);    // [{ x, y, width, height, scaleFactor, ... }, ...]
-  console.log(info.cursorTip);  // { x, y } in CSS coords (relative to window top-left), or null when not following
+  console.log(info.cursorTip);  // { x, y } in CSS coords (relative to window top-left), or null
 });
 win.on('message', (msg) => console.log('from page:', msg));
 win.on('closed',  ()    => process.exit(0));
-win.on('error',   (err) => console.error(err));
 ```
 
 #### Methods
@@ -227,7 +303,6 @@ win.on('error',   (err) => console.error(err));
 **`win.send(js)`** — Evaluate JavaScript in the WebView.
 ```js
 win.send(`document.body.style.background = 'coral'`);
-win.send(`document.getElementById('status').textContent = 'Done'`);
 ```
 
 **`win.setHTML(html)`** — Replace the entire page content.
@@ -235,41 +310,31 @@ win.send(`document.getElementById('status').textContent = 'Done'`);
 win.setHTML('<html><body><h1>Step 2</h1></body></html>');
 ```
 
-**`win.followCursor(enabled, anchor?, mode?)`** — Start or stop cursor tracking at runtime. Optional `anchor` sets the snap point (`top-left`, `top-right`, `right`, `bottom-right`, `bottom-left`, `left`). Optional `mode` sets the animation: `snap` (instant) or `spring` (elastic).
+**`win.followCursor(enabled, anchor?, mode?)`** — Start or stop cursor tracking at runtime. Optional `anchor` sets the snap point. Optional `mode` sets the animation: `snap` or `spring`.
 ```js
-win.followCursor(true);                        // attach to cursor (uses offset)
-win.followCursor(true, 'top-right');           // attach at top-right snap point
-win.followCursor(true, 'top-right', 'spring'); // spring physics follow
+win.followCursor(true);                        // attach to cursor
+win.followCursor(true, 'top-right');           // attach at snap point
+win.followCursor(true, 'top-right', 'spring'); // spring physics
 win.followCursor(false);                       // detach
 ```
 
-**`win.info`** — Getter for the last-known system info (screen, appearance, cursor). Available after `ready`.
+**`win.info`** — Getter for the last-known system info. Available after `ready`.
 ```js
 const { width, height } = win.info.screen;
 const isDark = win.info.appearance.darkMode;
 ```
 
-**`win.getInfo()`** — Request fresh system info. Emits an `info` event with updated data.
+**`win.getInfo()`** — Request fresh system info. Emits an `info` event.
+
+**`win.loadFile(path)`** — Load a local HTML file by absolute path.
+
+**`win.show(options?)`** — Reveal a hidden window. Optional `options.title` sets the window title.
 ```js
-win.getInfo();
-win.on('info', (info) => console.log(info.appearance.darkMode));
+win.show();
+win.show({ title: 'Results' });
 ```
 
-**`win.loadFile(path)`** — Load a local HTML file into the WebView by absolute path.
-```js
-win.loadFile('/path/to/page.html');
-```
-
-**`win.show(options?)`** — Reveal a hidden window (see `hidden` option). Activates the app and brings the window to front. Optional `options.title` sets the window title.
-```js
-win.show();                        // reveal with default title
-win.show({ title: 'Results' });    // reveal and set title
-```
-
-**`win.close()`** — Close the window programmatically.
-```js
-win.close();
-```
+**`win.close()`** — Close the window.
 
 ### JavaScript Bridge (in-page)
 
@@ -282,14 +347,14 @@ window.glimpse.send({ action: 'submit', value: 42 });
 // Close the window from inside the page
 window.glimpse.close();
 
-// Cursor tip position in CSS coordinates (px from window top-left, Y down)
-// null when follow-cursor is not active; updated on window resize
+// Cursor tip position in CSS coordinates (px from window top-left)
+// null when follow-cursor is not active
 const tip = window.glimpse.cursorTip; // { x: 0, y: 120 } or null
 ```
 
 ## Protocol
 
-Glimpse uses a newline-delimited JSON (JSON Lines) protocol. Each line is a complete JSON object. This makes it easy to drive the binary from any language.
+Glimpse uses a newline-delimited JSON (JSON Lines) protocol over stdin/stdout. Each line is a complete JSON object. Any language that can spawn a process and pipe JSON can use Glimpse directly.
 
 ### Stdin → Glimpse (commands)
 
@@ -303,10 +368,9 @@ Glimpse uses a newline-delimited JSON (JSON Lines) protocol. Each line is a comp
 {"type":"eval","js":"document.title = 'Updated'"}
 ```
 
-**Follow Cursor** — Toggle cursor tracking at runtime. Optional `anchor` sets the snap point. Optional `mode` sets animation: `snap` or `spring`.
+**Follow Cursor** — Toggle cursor tracking. Optional `anchor` and `mode`.
 ```json
 {"type":"follow-cursor","enabled":true}
-{"type":"follow-cursor","enabled":true,"anchor":"top-right"}
 {"type":"follow-cursor","enabled":true,"anchor":"top-right","mode":"spring"}
 {"type":"follow-cursor","enabled":false}
 ```
@@ -316,15 +380,25 @@ Glimpse uses a newline-delimited JSON (JSON Lines) protocol. Each line is a comp
 {"type":"file","path":"/path/to/page.html"}
 ```
 
-**Get Info** — Request current system info (screen, appearance, cursor). Responds with an `info` event.
+**Get Info** — Request current system info. Responds with an `info` event.
 ```json
 {"type":"get-info"}
 ```
 
-**Show** — Reveal a hidden window (started with `--hidden`). Activates the app and brings the window to front. Optional `title` sets the window title.
+**Show** — Reveal a hidden window. Optional `title`.
 ```json
 {"type":"show"}
 {"type":"show","title":"Results"}
+```
+
+**Title** — Update menu bar text (status item mode only).
+```json
+{"type":"title","title":"🔴"}
+```
+
+**Resize** — Change popover dimensions (status item mode only).
+```json
+{"type":"resize","width":400,"height":300}
 ```
 
 **Close** — Close the window and exit.
@@ -336,14 +410,12 @@ Glimpse uses a newline-delimited JSON (JSON Lines) protocol. Each line is a comp
 
 **Ready** — WebView finished loading. Includes system info.
 ```json
-{"type":"ready","screen":{"width":2560,"height":1440,"scaleFactor":2,"visibleX":0,"visibleY":48,"visibleWidth":2560,"visibleHeight":1367},"screens":[...],"appearance":{"darkMode":true,"accentColor":"#007AFF","reduceMotion":false,"increaseContrast":false},"cursor":{"x":500,"y":800},"cursorTip":{"x":0,"y":120}}
+{"type":"ready","screen":{...},"screens":[...],"appearance":{...},"cursor":{...},"cursorTip":{...}}
 ```
 
-`cursorTip` is present when follow-cursor is active. It holds the cursor tip position in CSS coordinates (px from window top-left, Y increases downward). `null` otherwise.
-
-**Info** — Response to a `get-info` command. Same shape as `ready` but with `type: "info"`.
+**Info** — Response to `get-info`. Same shape as `ready`.
 ```json
-{"type":"info","screen":{...},"screens":[...],"appearance":{...},"cursor":{...},"cursorTip":{"x":0,"y":120}}
+{"type":"info","screen":{...},"screens":[...],"appearance":{...},"cursor":{...}}
 ```
 
 **Message** — Data sent from the page via `window.glimpse.send(...)`.
@@ -351,7 +423,12 @@ Glimpse uses a newline-delimited JSON (JSON Lines) protocol. Each line is a comp
 {"type":"message","data":{"action":"submit","value":42}}
 ```
 
-**Closed** — Window closed (by user or via close command).
+**Click** — Menu bar icon clicked (status item mode only).
+```json
+{"type":"click"}
+```
+
+**Closed** — Window closed.
 ```json
 {"type":"closed"}
 ```
@@ -368,35 +445,43 @@ echo '{"type":"html","html":"PGh0bWw+PGJvZHk+SGVsbG8hPC9ib2R5PjwvaHRtbD4="}' \
   | ./src/glimpse --width 400 --height 300 --title "Hello"
 ```
 
-Available flags:
+**npx shortcut:**
+```bash
+echo '<h1>Hello</h1>' | npx glimpseui
+npx glimpseui --demo
+npx glimpseui page.html --frameless --transparent
+```
+
+**All flags:**
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--width N` | `800` | Window width in pixels |
 | `--height N` | `600` | Window height in pixels |
 | `--title STR` | `"Glimpse"` | Window title bar text |
-| `--x N` | — | Horizontal screen position (omit to center) |
-| `--y N` | — | Vertical screen position (omit to center) |
+| `--x N` | — | Horizontal screen position |
+| `--y N` | — | Vertical screen position |
 | `--frameless` | off | Remove the title bar |
-| `--floating` | off | Always on top of other windows |
-| `--transparent` | off | Transparent window background |
-| `--click-through` | off | Window ignores all mouse events |
-| `--follow-cursor` | off | Track cursor position in real-time |
-| `--follow-mode <mode>` | `snap` | Follow animation: `snap` (instant) or `spring` (elastic with overshoot) |
-| `--cursor-anchor <position>` | — | Snap point around cursor: `top-left`, `top-right`, `right`, `bottom-right`, `bottom-left`, `left` |
-| `--cursor-offset-x N` | `20` | Horizontal offset from cursor (or fine-tuning on top of `--cursor-anchor`) |
-| `--cursor-offset-y N` | `-20` | Vertical offset from cursor (or fine-tuning on top of `--cursor-anchor`) |
-| `--open-links` | off | Open clicked `http`/`https` links in the system default browser |
-| `--open-links-app <path>` | — | Open clicked `http`/`https` links in a specific browser app by full path (for example `"/Applications/Google Chrome.app"`) |
-| `--hidden` | off | Start the window hidden (prewarm mode) — load HTML in background, reveal with `show` command |
-| `--auto-close` | off | Exit after receiving the first message from the page |
+| `--floating` | off | Always on top |
+| `--transparent` | off | Transparent background |
+| `--click-through` | off | Mouse passes through |
+| `--follow-cursor` | off | Track cursor position |
+| `--follow-mode MODE` | `snap` | `snap` (instant) or `spring` (elastic) |
+| `--cursor-anchor POS` | — | Snap point: `top-left`, `top-right`, `right`, `bottom-right`, `bottom-left`, `left` |
+| `--cursor-offset-x N` | `20` | Horizontal cursor offset |
+| `--cursor-offset-y N` | `-20` | Vertical cursor offset |
+| `--open-links` | off | Open `http`/`https` links in system browser (macOS) |
+| `--open-links-app PATH` | — | Open links in a specific app (macOS) |
+| `--status-item` | off | Menu bar mode instead of window (macOS) |
+| `--hidden` | off | Start hidden (prewarm) |
+| `--auto-close` | off | Exit after first message |
 
-**Shell example — encode HTML and pipe it in:**
+**Shell example:**
 ```bash
 HTML=$(echo '<html><body><h1>Hi</h1></body></html>' | base64)
 {
   echo "{\"type\":\"html\",\"html\":\"$HTML\"}"
-  cat  # keep stdin open so the window stays up
+  cat  # keep stdin open
 } | ./src/glimpse --width 600 --height 400
 ```
 
@@ -424,51 +509,79 @@ for line in proc.stdout:
         break
 ```
 
-## Compile on Install
+## Environment Variables
 
-Every Mac ships with `swiftc` once Xcode Command Line Tools are installed — no Xcode IDE required. Glimpse takes advantage of this: running `npm install` triggers a `postinstall` script that compiles `src/glimpse.swift` into a native binary in about 2 seconds.
+| Variable | Description |
+|----------|-------------|
+| `GLIMPSE_BINARY_PATH` | Override the native binary path (any platform) |
+| `GLIMPSE_HOST_PATH` | Alias for `GLIMPSE_BINARY_PATH` |
 
-```
-> glimpse@0.1.0 postinstall
-> npm run build
+## Build from Source
 
-swiftc src/glimpse.swift -o src/glimpse  ✓
-```
+### macOS
 
-**If compilation fails**, the most common cause is missing Xcode CLT:
 ```bash
-xcode-select --install
+xcode-select --install      # one-time: install Xcode Command Line Tools
+npm run build:macos          # or: swiftc -O src/glimpse.swift -o src/glimpse
 ```
 
-To recompile manually at any time:
+### Linux
+
 ```bash
-npm run build
+# Install dependencies (pick your distro)
+# Fedora:  dnf install gtk4-devel webkitgtk6.0-devel gtk4-layer-shell-devel
+# Ubuntu:  apt install libgtk-4-dev libwebkitgtk-6.0-dev libgtk4-layer-shell-dev
+# Arch:    pacman -S gtk4 webkitgtk-6.0 gtk4-layer-shell
+
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh  # if no Rust toolchain
+npm run build:linux
 ```
+
+### Windows
+
+Requires [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) and Microsoft Edge WebView2 Runtime (pre-installed on Windows 10/11).
+
+```bash
+npm run build:windows
+```
+
+## Platform Notes
+
+The core protocol and Node.js API are identical across platforms. Some features are platform-specific:
+
+| Feature | macOS | Linux | Windows |
+|---------|-------|-------|---------|
+| Window modes (frameless, floating, transparent, click-through) | ✅ | ✅ | ✅ |
+| Follow cursor | ✅ | Hyprland only | ✅ |
+| Spring physics (follow mode) | ✅ | ✅ (Hyprland) | ✅ |
+| Status item (menu bar) | ✅ | — | — |
+| Open links externally | ✅ | — | — |
+| Hidden / prewarm | ✅ | ✅ | ✅ |
 
 ## Performance
 
-End-to-end benchmarks measuring the full round-trip: spawn process → open native window → render HTML → JavaScript executes → response back to Node.js. Measured on Apple Silicon (M-series Mac).
+End-to-end benchmarks: spawn process → open native window → render HTML → JavaScript executes → response back to Node.js. Measured on Apple Silicon (M-series Mac).
 
-### Warm Start (binary pre-compiled)
+| Scenario | Time |
+|----------|------|
+| Warm start (subsequent runs) | **~310ms** |
+| First run after idle | ~630ms |
+| Cold start (compile + run) | ~2,000ms |
 
-This is the typical case — the binary is compiled once at install time.
+Cold start only happens once during `npm install`. After that, it's always warm.
 
-| Run | Time |
-|-----|------|
-| 1st after idle | ~630ms |
-| Subsequent (median of 5) | **~310ms** |
+## Architecture
 
-The first invocation after a period of inactivity is slower (~630ms) as macOS loads system frameworks (Cocoa, WebKit) into memory. Subsequent runs settle at **~310ms** — that's spawn, window server, WebKit initialization, HTML render, JS eval, and JSON response over stdout, all in a third of a second.
-
-### Cold Start (compile from source + run)
-
-| Phase | Time |
-|-------|------|
-| `swiftc -O` compilation | ~1,600ms |
-| Window round-trip | ~350ms |
-| **Total** | **~2,000ms** |
-
-Cold start only happens once — during `npm install` (via `postinstall`) or a manual `npm run build`. After that, it's always a warm start.
+```
+src/glimpse.swift              — macOS native binary (Swift/Cocoa/WebKit)
+src/linux/                     — Linux native binary (Rust/GTK4/WebKitGTK)
+native/windows/Program.cs      — Windows native binary (.NET 8/WebView2)
+src/glimpse.mjs                — Node.js wrapper (EventEmitter API)
+src/follow-cursor-support.mjs  — Runtime capability detection
+bin/glimpse.mjs                — CLI entry point (npx glimpseui)
+scripts/build.mjs              — Unified cross-platform build
+scripts/postinstall.mjs        — Platform-aware postinstall
+```
 
 ## License
 

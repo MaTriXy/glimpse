@@ -36,7 +36,7 @@ for (let i = 0; i < args.length; i++) {
 
 if (flags.help) {
   console.log(`
-glimpseui — Native macOS micro-UI for scripts and agents
+glimpseui — Native micro-UI for scripts and agents
 
 Usage:
   glimpseui [options] [file.html]    Open an HTML file
