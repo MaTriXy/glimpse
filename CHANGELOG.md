@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2
+
+- **Fix**: Include `chromium-backend.mjs` in npm `files` array — the Chromium CDP backend was missing from published packages, breaking the Linux fallback. Thanks [@fredheir](https://github.com/fredheir)! ([#9](https://github.com/HazAT/glimpse/pull/9))
+
 ## 0.6.1
 
 - **Change**: Companion is now hidden by default — enable it with `/companion`. Previously it was shown by default. Existing preferences in `~/.pi/companion.json` are respected.
